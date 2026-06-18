@@ -64,16 +64,23 @@ async def publish_processor(task: Task) -> None:
         post_type = post_data.get("post_type", "art")
         retry_count = post_data.get("_retry", 0)
 
+        is_local_only = all(mi.get("source_tool") == "local" for mi in media_items) if media_items else False
+
         async with task._lock:
             task.progress.current = processed
             task.progress.stage = TaskStage.DOWNLOADING_MEDIA
 
         short_url = ""
-        if source_urls:
+        if source_urls and not is_local_only:
             short_url = await get_short_link(source_urls[0])
 
         if short_url and source_urls:
             post_text = post_text.replace(source_urls[0], short_url)
+
+        if is_local_only:
+            import re
+            post_text = re.sub(r"Source:\s*local:[^\n]*", "", post_text).strip()
+            post_text = re.sub(r"\n{3,}", "\n\n", post_text)
 
         attachments = []
         download_failed = False
@@ -115,6 +122,8 @@ async def publish_processor(task: Task) -> None:
             post_data["_retry"] = retry_count + 1
             posts.append(post_data)
             total += 1
+            async with task._lock:
+                task.progress.total = total
             logger.info("publish.queued_for_retry", post_id=post_id, retry=retry_count + 1)
             processed += 1
             continue

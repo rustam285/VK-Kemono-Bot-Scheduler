@@ -128,6 +128,8 @@ def assign_slots(
 
 def build_post_text(post_type: str, url: str) -> str:
     hashtag = f"#{post_type}@xkemonox"
+    if not url or url.startswith("local:"):
+        return f"✯ {hashtag} ✯"
     return f"✯ {hashtag} ✯\n\nSource: {url}"
 
 

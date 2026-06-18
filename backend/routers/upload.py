@@ -31,7 +31,7 @@ async def upload_media(file: UploadFile = File(...)):
     return {
         "id": file_id,
         "filename": filename,
-        "url": f"/api/upload/media/{filename}",
+        "url": f"http://127.0.0.1:8000/api/upload/media/{filename}",
         "size": len(content),
         "type": "video" if ext in (".mp4", ".mov", ".webm") else "photo",
     }
