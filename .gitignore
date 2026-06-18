@@ -11,5 +11,7 @@ frontend/node_modules/
 __pycache__/
 .DS_Store
 Thumbs.db
-TZ_work_nodocker_gdl.md
 cookies.txt
+.gitignore
+graphify-out/
+.graphifyignore
