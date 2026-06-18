@@ -8,6 +8,7 @@ interface MediaItem {
   thumbnail_url?: string;
   original_url?: string;
   selected?: boolean;
+  source_tool?: string;
 }
 
 interface MediaCardProps {

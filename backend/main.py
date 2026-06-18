@@ -9,7 +9,7 @@ load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 
 from logging_config import setup_logging
 from routers.extract import router as extract_router
@@ -19,6 +19,7 @@ from routers.scheduled import router as scheduled_router
 from routers.settings import router as settings_router
 from routers.stats import router as stats_router
 from routers.tasks import router as tasks_router
+from routers.upload import router as upload_router
 from schemas import error_response
 from services.task_store import _tasks, TaskStatus, _persist_tasks, start_cleanup_loop
 import structlog
@@ -57,6 +58,15 @@ async def lifespan(app: FastAPI):
         signal.signal(signal.SIGTERM, _windows_handler)
 
     await start_cleanup_loop()
+
+    from services.supabase_client import cleanup_stale_posts
+    try:
+        removed = await cleanup_stale_posts()
+        if removed:
+            logger.info("startup.cleanup", removed=removed)
+    except Exception as exc:
+        logger.warning("startup.cleanup_failed", error=str(exc))
+
     yield
     _handle_shutdown()
 
@@ -96,3 +106,13 @@ app.include_router(publish_router, prefix="/api")
 app.include_router(scheduled_router, prefix="/api")
 app.include_router(stats_router, prefix="/api")
 app.include_router(tasks_router, prefix="/api")
+app.include_router(upload_router, prefix="/api")
+
+
+@app.get("/api/upload/media/{filename}")
+async def serve_upload(filename: str):
+    from routers.upload import UPLOAD_DIR
+    filepath = UPLOAD_DIR / filename
+    if not filepath.exists():
+        raise HTTPException(404, "File not found")
+    return FileResponse(filepath)

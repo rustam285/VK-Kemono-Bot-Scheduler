@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { MediaCard, type MediaItem } from "@/components/MediaCard/MediaCard";
-import { useExtract } from "@/api/client";
+import { useExtract, api } from "@/api/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Upload, Plus, Trash2, Link, X, Merge, Ungroup, Loader2 } from "lucide-react";
 
@@ -76,9 +76,21 @@ function Step1Sources({ sources, localFiles, localPreviews, onSourcesChange, onL
     onSourcesChange(sources.map((s) => s.groupId === groupId ? { ...s, groupId: null } : s));
   };
 
-  const addFiles = (files: File[]) => {
-    const previews = files.map((f) => ({ file: f, url: URL.createObjectURL(f) }));
-    onLocalFilesChange([...localFiles, ...files], [...localPreviews, ...previews]);
+  const addFiles = async (files: File[]) => {
+    const newPreviews: { file: File; url: string }[] = [];
+    for (const f of files) {
+      try {
+        const fd = new FormData();
+        fd.append("file", f);
+        const resp = await api.post("/upload/media", fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        newPreviews.push({ file: f, url: resp.data.url });
+      } catch {
+        newPreviews.push({ file: f, url: URL.createObjectURL(f) });
+      }
+    }
+    onLocalFilesChange([...localFiles, ...files], [...localPreviews, ...newPreviews]);
   };
 
   const removeLocalFile = (idx: number) => {

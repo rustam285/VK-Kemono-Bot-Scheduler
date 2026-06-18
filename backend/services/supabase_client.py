@@ -138,8 +138,18 @@ async def get_scheduled_post_by_vk_id(vk_post_id: int) -> Optional[dict[str, Any
 async def get_posts_without_media() -> list[dict[str, Any]]:
     def _query():
         client = _get_client()
-        result = client.table("scheduled_posts").select("*").eq("has_media", False).order("scheduled_at").execute()
+        result = client.table("scheduled_posts").select("*").eq("has_media", False).neq("status", "deleted").order("scheduled_at").execute()
         return result.data
 
     async with _lock:
         return await asyncio.to_thread(_run_with_retry, _query)
+
+
+async def cleanup_stale_posts() -> int:
+    def _delete():
+        client = _get_client()
+        result = client.table("scheduled_posts").delete().in_("status", ["deleted", "error"]).execute()
+        return len(result.data) if result.data else 0
+
+    async with _lock:
+        return await asyncio.to_thread(_run_with_retry, _delete)
