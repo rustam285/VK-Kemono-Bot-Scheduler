@@ -24,6 +24,7 @@ TEMP_BASE = Path(tempfile.gettempdir()) / "vk_scheduler"
 TEMP_BASE.mkdir(parents=True, exist_ok=True)
 
 TWITTER_DOMAINS = {"twitter.com", "x.com", "t.co"}
+TIKTOK_DOMAINS = {"tiktok.com", "vm.tiktok.com"}
 _twitter_lock = asyncio.Lock()
 
 _error_counts: dict[str, list[float]] = {}
@@ -147,12 +148,12 @@ def _media_from_ytdlp(entries: list[dict[str, Any]], url: str) -> list[MediaItem
                 id=item_id,
                 type="video",
                 thumbnail_url=thumbnail,
-                original_url=best_url,
+                original_url=entry.get("webpage_url") or url,
                 selected=True,
                 source_tool="yt-dlp",
             ))
         else:
-            url_val = entry.get("url") or entry.get("webpage_url") or ""
+            url_val = entry.get("webpage_url") or entry.get("url") or url
             thumbnail = entry.get("thumbnail") or url_val
             items.append(MediaItem(
                 id=item_id,
@@ -165,7 +166,7 @@ def _media_from_ytdlp(entries: list[dict[str, Any]], url: str) -> list[MediaItem
 
     if not items:
         thumbnail = entries[0].get("thumbnail", "") if entries else ""
-        url_val = entries[0].get("url", "") if entries else ""
+        url_val = entries[0].get("webpage_url") or entries[0].get("url", "") or url
         items.append(MediaItem(
             id=f"yt_0_{hash(url) & 0xFFFFFF:06x}",
             type="photo",
@@ -361,6 +362,10 @@ def is_twitter_url(url: str) -> bool:
     return _domain_from_url(url) in TWITTER_DOMAINS
 
 
+def is_tiktok_url(url: str) -> bool:
+    return _domain_from_url(url) in TIKTOK_DOMAINS
+
+
 async def download_media_file(
     media_item: MediaItem,
     task_id: str,
@@ -377,7 +382,7 @@ async def download_media_file(
     settings = await get_settings()
     timeout = settings.get("ytdlp_timeout_seconds", 60)
 
-    if is_twitter_url(url):
+    if is_twitter_url(url) or is_tiktok_url(url):
         return await _download_ytdlp(url, filepath, timeout, max_size_mb)
 
     if url.startswith("http://") or url.startswith("https://"):
