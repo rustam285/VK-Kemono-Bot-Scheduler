@@ -22,7 +22,7 @@
 
 ```bash
 git clone https://github.com/rustam285/VK-Kemono-Bot-Scheduler.git
-cd VK-Kemono-Bot-Scheduler
+cd Kemono-Bot-Scheduler
 
 # Создать .env из примера и заполнить
 cp .env.example .env
