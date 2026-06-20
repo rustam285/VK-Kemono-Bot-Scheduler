@@ -51,11 +51,45 @@ function StatsHeader({ onMenuToggle }: { onMenuToggle?: () => void }) {
             )}
             <span className="text-sm text-foreground">{stats.group.name}</span>
           </div>
+          {stats.tg_account && (
+            <>
+              <span className="hidden sm:inline text-muted-foreground">|</span>
+              <div className="hidden sm:flex items-center gap-2">
+                {stats.tg_account.photo_url ? (
+                  <img src={stats.tg_account.photo_url} alt="" className="w-7 h-7 rounded-full" />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
+                    {(stats.tg_account.name || "TG").charAt(0)}
+                  </div>
+                )}
+                <span className="text-sm text-foreground">{stats.tg_account.name || stats.tg_account.username || "Telegram"}</span>
+              </div>
+            </>
+          )}
+          {stats.tg_channel_info && (
+            <>
+              <span className="hidden sm:inline text-muted-foreground">→</span>
+              <div className="hidden sm:flex items-center gap-2">
+                {stats.tg_channel_info.photo_url ? (
+                  <img src={stats.tg_channel_info.photo_url} alt="" className="w-7 h-7 rounded-full" />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold">
+                    {(stats.tg_channel_info.title || "CH").charAt(0)}
+                  </div>
+                )}
+                <span className="text-sm text-foreground">{stats.tg_channel_info.title}</span>
+              </div>
+            </>
+          )}
         </div>
         <div className="hidden md:flex items-center gap-6 text-sm">
           <div>
-            <span className="text-muted-foreground">Отложено: </span>
-            <span className="font-semibold text-accent">{stats.total_scheduled}</span>
+            <span className="text-muted-foreground">VK: </span>
+            <span className="font-semibold text-accent">{stats.vk_scheduled}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">TG: </span>
+            <span className="font-semibold text-blue-400">{stats.tg_scheduled}</span>
           </div>
           {stats.last_post_datetime && (
             <div>
@@ -72,8 +106,12 @@ function StatsHeader({ onMenuToggle }: { onMenuToggle?: () => void }) {
         </div>
         <div className="flex md:hidden items-center gap-3 text-xs">
           <div>
-            <span className="text-muted-foreground">Отложено </span>
-            <span className="font-semibold text-accent">{stats.total_scheduled}</span>
+            <span className="text-muted-foreground">VK </span>
+            <span className="font-semibold text-accent">{stats.vk_scheduled}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">TG </span>
+            <span className="font-semibold text-blue-400">{stats.tg_scheduled}</span>
           </div>
           {stats.last_dense_date && (
             <div>

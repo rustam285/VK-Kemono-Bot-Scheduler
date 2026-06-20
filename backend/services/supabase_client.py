@@ -115,6 +115,15 @@ async def update_scheduled_post(vk_post_id: int, updates: dict[str, Any]) -> Non
         await asyncio.to_thread(_run_with_retry, _update)
 
 
+async def update_scheduled_post_by_id(post_id: str, updates: dict[str, Any]) -> None:
+    def _update():
+        client = _get_client()
+        client.table("scheduled_posts").update(updates).eq("id", post_id).execute()
+
+    async with _lock:
+        await asyncio.to_thread(_run_with_retry, _update)
+
+
 async def get_scheduled_posts() -> list[dict[str, Any]]:
     def _query():
         client = _get_client()

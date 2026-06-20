@@ -84,6 +84,8 @@ async def telegram_select_channel(body: ChannelSelectRequest):
         "tg_channel_id": body.channel_id,
         "tg_channel_title": body.channel_title,
     })
+    from routers.stats import reset_tg_photos_cache
+    reset_tg_photos_cache()
     return {"status": "ok", "channel_id": body.channel_id, "channel_title": body.channel_title}
 
 

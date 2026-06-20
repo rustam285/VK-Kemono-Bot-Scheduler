@@ -28,6 +28,8 @@ _initialized = False
 _scheduled_cache: dict[str, tuple[float, list]] = {}
 _SCHEDULED_CACHE_TTL = 30
 
+_channel_title_cache: dict[str, str] = {}
+
 TG_RETRY_DELAYS = [1, 4, 16]
 TG_MAX_RETRIES = 3
 
@@ -44,6 +46,13 @@ def _generate_device_kwargs() -> dict[str, str]:
 
 
 TG_DEVICE_KWARGS = _generate_device_kwargs()
+
+
+def _normalize_channel_id(channel: str | int) -> int:
+    cid = int(channel)
+    if cid > 0:
+        return int(f"-100{cid}")
+    return cid
 
 
 class TelegramError(Exception):
@@ -307,6 +316,29 @@ async def get_channels() -> list[dict]:
             return []
 
 
+async def get_channel_title(channel_id: str | int) -> Optional[str]:
+    ch = str(channel_id)
+    if ch in _channel_title_cache:
+        return _channel_title_cache[ch] or None
+    try:
+        async with _client_lock:
+            client = _ensure_client()
+            if not await client.is_user_authorized():
+                return None
+            entity_id = int(ch)
+            if entity_id > 0:
+                entity_id = int(f"-100{entity_id}")
+            entity = await client.get_entity(entity_id)
+            if hasattr(entity, "title"):
+                _channel_title_cache[ch] = entity.title
+                return entity.title
+            _channel_title_cache[ch] = ""
+            return None
+    except Exception:
+        _channel_title_cache[ch] = ""
+        return None
+
+
 async def get_scheduled(channel: str | int) -> list[dict]:
     cache_key = str(channel)
     now = time.time()
@@ -320,7 +352,7 @@ async def get_scheduled(channel: str | int) -> list[dict]:
         if not await client.is_user_authorized():
             return []
         try:
-            entity = await client.get_entity(channel)
+            entity = await client.get_entity(_normalize_channel_id(channel))
             messages = await client.get_messages(entity, scheduled=True)
             result = []
             for msg in messages:
@@ -383,7 +415,7 @@ async def _send_text_scheduled(
 ) -> list[int]:
     async with _client_lock:
         client = _ensure_client()
-        entity = await client.get_entity(channel)
+        entity = await client.get_entity(_normalize_channel_id(channel))
         msg = await client.send_message(entity, text, schedule=schedule_dt)
         _invalidate_cache(str(channel))
         return [msg.id]
@@ -397,7 +429,7 @@ async def _send_single_media_scheduled(
 ) -> list[int]:
     async with _client_lock:
         client = _ensure_client()
-        entity = await client.get_entity(channel)
+        entity = await client.get_entity(_normalize_channel_id(channel))
         total_size = file.stat().st_size
 
         def _progress(current: int, total: int):
@@ -419,7 +451,7 @@ async def _send_album_scheduled(
 ) -> list[int]:
     async with _client_lock:
         client = _ensure_client()
-        entity = await client.get_entity(channel)
+        entity = await client.get_entity(_normalize_channel_id(channel))
 
         def _progress(current: int, total: int):
             pct = int(current * 100 / total) if total else 0
@@ -437,12 +469,13 @@ async def _send_album_scheduled(
 async def delete_scheduled(channel: str | int, message_ids: list[int]) -> bool:
     async with _client_lock:
         client = _ensure_client()
-        entity = await client.get_entity(channel)
+        entity = await client.get_entity(_normalize_channel_id(channel))
+        from telethon.tl.functions.messages import DeleteScheduledMessagesRequest
         try:
-            await client.delete_messages(entity, message_ids)
+            await client(DeleteScheduledMessagesRequest(peer=entity, id=message_ids))
         except FloodWaitError as e:
             logger.warning("telegram.delete_flood_wait", seconds=e.seconds)
             await asyncio.sleep(e.seconds)
-            await client.delete_messages(entity, message_ids)
+            await client(DeleteScheduledMessagesRequest(peer=entity, id=message_ids))
         _invalidate_cache(str(channel))
         return True

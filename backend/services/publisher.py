@@ -259,30 +259,68 @@ async def publish_processor(task: Task) -> None:
             if tg_message_ids:
                 error_post["tg_message_ids"] = json.dumps(tg_message_ids)
                 error_post["tg_channel"] = str(tg_channel)
+                _title = settings.get("tg_channel_title")
+                if _title:
+                    error_post["tg_channel_title"] = _title
             await insert_scheduled_post(error_post)
         else:
             async with task._lock:
                 task.results[processed % len(task.results)].vk_post_id = vk_post_id
                 task.results[processed % len(task.results)].status = "ok"
 
-            db_post = {
-                "vk_post_id": vk_post_id,
-                "post_type": post_type,
-                "scheduled_at": scheduled_at,
-                "source_urls": source_urls,
-                "media_attachments": [
-                    {"type": mi.get("type"), "attachment": att}
-                    for mi, att in zip(media_items[:len(vk_attachments)], vk_attachments)
-                ],
-                "post_text": post_text,
-                "has_media": len(downloaded_files) > 0,
-                "status": "scheduled",
-                "platform": platform,
-            }
-            if tg_message_ids:
-                db_post["tg_message_ids"] = json.dumps(tg_message_ids)
-                db_post["tg_channel"] = str(tg_channel)
-            await insert_scheduled_post(db_post)
+            vk_attachments_data = [
+                {"type": mi.get("type"), "attachment": att}
+                for mi, att in zip(media_items[:len(vk_attachments)], vk_attachments)
+            ]
+
+            if platform == "both" and vk_post_id and tg_message_ids:
+                vk_db = {
+                    "vk_post_id": vk_post_id,
+                    "post_type": post_type,
+                    "scheduled_at": scheduled_at,
+                    "source_urls": source_urls,
+                    "media_attachments": vk_attachments_data,
+                    "post_text": post_text,
+                    "has_media": len(downloaded_files) > 0,
+                    "status": "scheduled",
+                    "platform": "vk",
+                }
+                await insert_scheduled_post(vk_db)
+
+                tg_db = {
+                    "post_type": post_type,
+                    "scheduled_at": scheduled_at,
+                    "source_urls": source_urls,
+                    "post_text": post_text,
+                    "has_media": len(downloaded_files) > 0,
+                    "status": "scheduled",
+                    "platform": "tg",
+                    "tg_message_ids": json.dumps(tg_message_ids),
+                    "tg_channel": str(tg_channel),
+                }
+                _title = settings.get("tg_channel_title")
+                if _title:
+                    tg_db["tg_channel_title"] = _title
+                await insert_scheduled_post(tg_db)
+            else:
+                db_post = {
+                    "vk_post_id": vk_post_id,
+                    "post_type": post_type,
+                    "scheduled_at": scheduled_at,
+                    "source_urls": source_urls,
+                    "media_attachments": vk_attachments_data,
+                    "post_text": post_text,
+                    "has_media": len(downloaded_files) > 0,
+                    "status": "scheduled",
+                    "platform": platform,
+                }
+                if tg_message_ids:
+                    db_post["tg_message_ids"] = json.dumps(tg_message_ids)
+                    db_post["tg_channel"] = str(tg_channel)
+                    _title = settings.get("tg_channel_title")
+                    if _title:
+                        db_post["tg_channel_title"] = _title
+                await insert_scheduled_post(db_post)
 
             for url in source_urls:
                 await record_used_url(url, vk_post_id)

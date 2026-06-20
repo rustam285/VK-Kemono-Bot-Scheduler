@@ -1,4 +1,4 @@
-import { useScheduledPosts, useDeletePost, useUpdatePost, api } from "@/api/client";
+import { useScheduledPosts, useDeletePost, useUpdatePost, useSettings, api } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,12 +18,15 @@ const TYPE_VARIANT: Record<string, "art" | "fursuit" | "video"> = {
 
 function DayDetail({ date, onClose }: DayDetailProps) {
   const { data: posts, isLoading } = useScheduledPosts();
+  const { data: settings } = useSettings();
   const deletePost = useDeletePost();
   const updatePost = useUpdatePost();
   const { addToast } = useToast();
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [editDate, setEditDate] = useState("");
+
+  const groupId = settings?.vk_group_id;
 
   const dayPosts = (posts || []).filter((p: any) => {
     if (!p.scheduled_at) return false;
@@ -34,6 +37,8 @@ function DayDetail({ date, onClose }: DayDetailProps) {
     try {
       if (post.vk_post_id) {
         await deletePost.mutateAsync(post.vk_post_id);
+      } else if (post.id) {
+        await api.delete(`/scheduled/by-id/${post.id}`);
       }
       if (post.platform === "tg" || post.platform === "both") {
         try {
@@ -54,22 +59,42 @@ function DayDetail({ date, onClose }: DayDetailProps) {
   };
 
   const startEdit = (post: any) => {
-    setEditingId(post.vk_post_id);
+    setEditingId(post.id || post.vk_post_id);
     setEditText(post.post_text || "");
     setEditDate(post.scheduled_at ? post.scheduled_at.slice(0, 16) : "");
   };
 
-  const saveEdit = async (vkPostId: number) => {
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditText("");
+    setEditDate("");
+  };
+
+  const saveEdit = async (post: any) => {
+    if (!post.id && !post.vk_post_id) {
+      addToast({ title: "Ошибка", description: "Пост не имеет идентификатора", variant: "destructive" });
+      return;
+    }
     try {
-      await updatePost.mutateAsync({
-        vkPostId,
-        data: { post_text: editText, scheduled_at: editDate ? new Date(editDate).toISOString() : undefined },
-      });
+      const originalDate = post.scheduled_at ? post.scheduled_at.slice(0, 16) : "";
+      const data: Record<string, unknown> = { post_text: editText };
+      if (editDate !== originalDate) {
+        data.scheduled_at = editDate ? new Date(editDate).toISOString() : undefined;
+      }
+      await updatePost.mutateAsync({ postId: post.id, data });
       setEditingId(null);
       addToast({ title: "Сохранено", description: "Пост обновлён", variant: "success" });
-    } catch {
-      addToast({ title: "Ошибка", description: "Не удалось обновить пост", variant: "destructive" });
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.message || "Не удалось обновить пост";
+      addToast({ title: "Ошибка", description: detail, variant: "destructive" });
     }
+  };
+
+  const getVkLink = (post: any) => {
+    if (groupId && post.vk_post_id) {
+      return `https://vk.com/wall-${groupId}_${post.vk_post_id}`;
+    }
+    return `https://vk.com/wall${post.vk_post_id}`;
   };
 
   const displayDate = new Date(date + "T00:00:00").toLocaleDateString("ru-RU", {
@@ -98,13 +123,14 @@ function DayDetail({ date, onClose }: DayDetailProps) {
           ) : (
             <div className="space-y-3">
               {dayPosts.map((post: any) => {
-                const isEditing = editingId === post.vk_post_id;
+                const editKey = post.id || post.vk_post_id;
+                const isEditing = editingId === editKey;
                 const time = post.scheduled_at
                   ? new Date(post.scheduled_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })
                   : "";
 
                 return (
-                  <div key={post.vk_post_id || post.id} className="bg-background border border-border rounded-lg p-3 space-y-2">
+                  <div key={post.id || post.vk_post_id} className="bg-background border border-border rounded-lg p-3 space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">{time}</span>
@@ -114,14 +140,20 @@ function DayDetail({ date, onClose }: DayDetailProps) {
                         {post.platform && post.platform !== "vk" && (
                           <Badge variant="outline" className="text-[10px]">
                             {post.platform === "both" ? "VK + TG" : "TG"}
+                            {post.tg_channel_title && ` · ${post.tg_channel_title}`}
                           </Badge>
                         )}
                       </div>
                       <div className="flex gap-1">
                         {isEditing ? (
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => saveEdit(post.vk_post_id)}>
-                            <Check className="w-3.5 h-3.5 text-green-400" />
-                          </Button>
+                          <>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => saveEdit(post)}>
+                              <Check className="w-3.5 h-3.5 text-green-400" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={cancelEdit}>
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
+                          </>
                         ) : (
                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => startEdit(post)}>
                             <Pencil className="w-3.5 h-3.5" />
@@ -164,7 +196,7 @@ function DayDetail({ date, onClose }: DayDetailProps) {
 
                     {post.vk_post_id && (
                       <a
-                        href={`https://vk.com/wall-${post.vk_post_id}`}
+                        href={getVkLink(post)}
                         target="_blank"
                         rel="noopener"
                         className="inline-flex items-center gap-1 text-xs text-accent hover:underline"

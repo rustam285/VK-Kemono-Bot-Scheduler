@@ -122,8 +122,8 @@ export function useDeletePost() {
 export function useUpdatePost() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ vkPostId, data }: { vkPostId: number; data: Record<string, unknown> }) =>
-      api.put(`/scheduled/${vkPostId}`, data).then((r) => r.data),
+    mutationFn: ({ postId, data }: { postId: string; data: Record<string, unknown> }) =>
+      api.put(`/scheduled/by-id/${postId}`, data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["scheduled"] });
       qc.invalidateQueries({ queryKey: ["calendar"] });
